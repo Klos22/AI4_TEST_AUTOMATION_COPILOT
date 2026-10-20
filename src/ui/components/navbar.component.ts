@@ -13,7 +13,19 @@ export class NavbarComponent {
     this.ordersLink = page.getByRole('link', { name: /^Orders/ });
   }
 
+  async openBooks(): Promise<void> {
+    await this.booksLink.click();
+  }
+
+  async openManageBooks(): Promise<void> {
+    await this.manageBooksLink.click();
+  }
+
   async openAuthors(): Promise<void> {
     await this.authorsLink.click();
+  }
+
+  async openOrders(): Promise<void> {
+    await this.ordersLink.click();
   }
 }
