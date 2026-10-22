@@ -6,6 +6,8 @@ import { AuthorsPage } from '@ui/pages/authors.page';
 import { NavbarComponent } from '@ui/components/navbar.component';
 import { AddAuthorDialogComponent } from '@ui/components/add-author-dialog.component';
 import { AuthorCardComponent } from '@ui/components/author-card.component';
+import { ManageBooksPage } from '@ui/pages/manage-books.page';
+import { AddBookDialogComponent } from '@ui/components/add-book-dialog.component';
 
 type Pages = {
   bookstorePage: BookstorePage;
@@ -15,6 +17,8 @@ type Pages = {
   navbar: NavbarComponent;
   addAuthorDialog: AddAuthorDialogComponent;
   authorCard: AuthorCardComponent;
+  manageBooksPage: ManageBooksPage;
+  addBookDialog: AddBookDialogComponent;
 };
 
 export const test = base.extend<Pages>({
@@ -38,6 +42,12 @@ export const test = base.extend<Pages>({
   },
   authorCard: async ({ page }, use) => {
     await use(new AuthorCardComponent(page));
+  },
+  manageBooksPage: async ({ page }, use) => {
+    await use(new ManageBooksPage(page));
+  },
+  addBookDialog: async ({ page }, use) => {
+    await use(new AddBookDialogComponent(page));
   },
 });
 
