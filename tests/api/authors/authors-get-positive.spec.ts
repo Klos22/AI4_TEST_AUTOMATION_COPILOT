@@ -1,73 +1,38 @@
 import { test, expect } from '@fixtures/test.fixture';
-import { faker } from '@faker-js/faker';
-import type { APIRequestContext } from '@playwright/test';
+import { getRandomAuthorOverridePayload, getRandomAuthorPayload } from '@api/factories/author.factory';
+import { HTTP_200_OK } from '@api/consts/http.status.codes.const';
+import { AuthorPayload, AuthorResponse } from '@api/models/author.model';
+import { parseResponse } from '@utils/parse.response.utils';
 
-const API_URL = 'https://bookstoreapi.up.railway.app';
+test.describe('GET /authors 2xx', { tag: ['@api', '@authors', '@smoke'] }, () => {
+  let authorA: AuthorPayload;
+  let authorB: AuthorPayload;
+  let authorC: AuthorPayload;
+  const createdIds: number[] = [];
 
-interface AuthorData {
-  firstName: string;
-  lastName: string;
-}
-
-interface AuthorResponse extends AuthorData {
-  id: number;
-}
-
-// API accepts letters only in names, so uniqueness comes from a random lowercase suffix
-const uniqueName = (prefix: string): string => `${prefix}${faker.string.alpha({ length: 10, casing: 'lower' })}`;
-
-async function createAuthor(request: APIRequestContext, author: AuthorData): Promise<void> {
-  const response = await request.post(`${API_URL}/authors`, { data: author });
-  expect(response.status(), 'precondition: POST /authors').toBe(201);
-}
-
-async function findAuthors(request: APIRequestContext, query: Partial<AuthorData>): Promise<AuthorResponse[]> {
-  const response = await request.get(`${API_URL}/authors`, {
-    headers: { Accept: 'application/json' },
-    params: query,
-  });
-  expect(response.status(), 'lookup: GET /authors').toBe(200);
-  return response.json();
-}
-
-test.describe('GET /authors - positive', () => {
-  let authorA: AuthorData;
-  let authorB: AuthorData;
-  let authorC: AuthorData;
-  const createdLastNames: string[] = [];
-
-  test.beforeEach(async ({ request }) => {
-    const sharedFirstName = uniqueName('Afirst');
-    const sharedLastName = uniqueName('Alast');
-
-    authorA = { firstName: sharedFirstName, lastName: sharedLastName };
-    authorB = { firstName: sharedFirstName, lastName: uniqueName('Blast') };
-    authorC = { firstName: uniqueName('Cfirst'), lastName: sharedLastName };
+  test.beforeEach(async ({ authorsApiSteps }) => {
+    authorA = getRandomAuthorPayload();
+    authorB = getRandomAuthorOverridePayload({ firstName: authorA.firstName });
+    authorC = getRandomAuthorOverridePayload({ lastName: authorA.lastName });
 
     for (const author of [authorA, authorB, authorC]) {
-      await createAuthor(request, author);
-    }
-    createdLastNames.push(authorA.lastName, authorB.lastName);
-  });
-
-  test.afterEach(async ({ request }) => {
-    for (const lastName of createdLastNames.splice(0)) {
-      const authors = await findAuthors(request, { lastName });
-      for (const author of authors) {
-        const response = await request.delete(`${API_URL}/authors/${author.id}`);
-        expect(response.status(), 'cleanup: DELETE /authors/{id}').toBe(204);
-      }
+      const created = await authorsApiSteps.createAuthor(author);
+      createdIds.push(created.id);
     }
   });
 
-  test('TC-AUTHORS-GET-POS-001 returns all authors without filters', async ({ request }) => {
-    const response = await request.get(`${API_URL}/authors`, {
-      headers: { Accept: 'application/json' },
-    });
+  test.afterEach(async ({ authorsApiSteps }) => {
+    for (const id of createdIds.splice(0)) {
+      await authorsApiSteps.deleteAuthor(id);
+    }
+  });
 
-    expect(response.status()).toBe(200);
+  test('should return all authors without filters', async ({ authorsApiRequest }) => {
+    const response = await authorsApiRequest.getAuthors();
 
-    const body: AuthorResponse[] = await response.json();
+    expect(response.status()).toBe(HTTP_200_OK);
+
+    const body = await parseResponse<AuthorResponse[]>(response);
 
     expect(Array.isArray(body)).toBeTruthy();
 
@@ -77,15 +42,12 @@ test.describe('GET /authors - positive', () => {
     expect(Number.isInteger(found?.id)).toBeTruthy();
   });
 
-  test('TC-AUTHORS-GET-POS-002 filters by firstName only', async ({ request }) => {
-    const response = await request.get(`${API_URL}/authors`, {
-      headers: { Accept: 'application/json' },
-      params: { firstName: authorA.firstName },
-    });
+  test('should filter authors by firstName only', async ({ authorsApiRequest }) => {
+    const response = await authorsApiRequest.getAuthors({ firstName: authorA.firstName });
 
-    expect(response.status()).toBe(200);
+    expect(response.status()).toBe(HTTP_200_OK);
 
-    const body: AuthorResponse[] = await response.json();
+    const body = await parseResponse<AuthorResponse[]>(response);
     const lastNames = body.map((a) => a.lastName);
 
     expect(lastNames).toContain(authorA.lastName);
@@ -94,15 +56,12 @@ test.describe('GET /authors - positive', () => {
     expect(body.every((a) => a.firstName === authorA.firstName)).toBeTruthy();
   });
 
-  test('TC-AUTHORS-GET-POS-003 filters by lastName only', async ({ request }) => {
-    const response = await request.get(`${API_URL}/authors`, {
-      headers: { Accept: 'application/json' },
-      params: { lastName: authorA.lastName },
-    });
+  test('should filter authors by lastName only', async ({ authorsApiRequest }) => {
+    const response = await authorsApiRequest.getAuthors({ lastName: authorA.lastName });
 
-    expect(response.status()).toBe(200);
+    expect(response.status()).toBe(HTTP_200_OK);
 
-    const body: AuthorResponse[] = await response.json();
+    const body = await parseResponse<AuthorResponse[]>(response);
     const firstNames = body.map((a) => a.firstName);
 
     expect(firstNames).toContain(authorA.firstName);
@@ -111,97 +70,81 @@ test.describe('GET /authors - positive', () => {
     expect(body.every((a) => a.lastName === authorA.lastName)).toBeTruthy();
   });
 
-  test('TC-AUTHORS-GET-POS-004 filters by firstName and lastName', async ({ request }) => {
-    const response = await request.get(`${API_URL}/authors`, {
-      headers: { Accept: 'application/json' },
-      params: { firstName: authorA.firstName, lastName: authorA.lastName },
+  test('should filter authors by firstName and lastName', async ({ authorsApiRequest }) => {
+    const response = await authorsApiRequest.getAuthors({
+      firstName: authorA.firstName,
+      lastName: authorA.lastName,
     });
 
-    expect(response.status()).toBe(200);
+    expect(response.status()).toBe(HTTP_200_OK);
 
-    const body: AuthorResponse[] = await response.json();
+    const body = await parseResponse<AuthorResponse[]>(response);
 
     expect(body).toHaveLength(1);
     expect(body[0].firstName).toBe(authorA.firstName);
     expect(body[0].lastName).toBe(authorA.lastName);
   });
 
-  test('TC-AUTHORS-GET-POS-005 returns empty array when nothing matches', async ({ request }) => {
-    const nonMatching = uniqueName('Nonexistent');
+  test('should return empty array when nothing matches', async ({ authorsApiRequest }) => {
+    const nonMatching = getRandomAuthorPayload();
 
-    const response = await request.get(`${API_URL}/authors`, {
-      headers: { Accept: 'application/json' },
-      params: { firstName: nonMatching },
-    });
+    const response = await authorsApiRequest.getAuthors({ firstName: nonMatching.firstName });
 
-    expect(response.status()).toBe(200);
+    expect(response.status()).toBe(HTTP_200_OK);
 
-    const body: AuthorResponse[] = await response.json();
+    const body = await parseResponse<AuthorResponse[]>(response);
 
     expect(Array.isArray(body)).toBeTruthy();
     expect(body).toHaveLength(0);
   });
 
-  test('TC-AUTHORS-GET-POS-006 author created via POST is visible in GET', async ({ request }) => {
-    const newAuthor: AuthorData = {
-      firstName: uniqueName('Newfirst'),
-      lastName: uniqueName('Newlast'),
-    };
+  test('should return author created via POST in GET', async ({ authorsApiSteps, authorsApiRequest }) => {
+    const newAuthor = getRandomAuthorPayload();
 
-    const postResponse = await request.post(`${API_URL}/authors`, { data: newAuthor });
-    expect(postResponse.status()).toBe(201);
-    createdLastNames.push(newAuthor.lastName);
+    const created = await authorsApiSteps.createAuthor(newAuthor);
+    createdIds.push(created.id);
 
-    const response = await request.get(`${API_URL}/authors`, {
-      headers: { Accept: 'application/json' },
-      params: { firstName: newAuthor.firstName, lastName: newAuthor.lastName },
+    const response = await authorsApiRequest.getAuthors({
+      firstName: newAuthor.firstName,
+      lastName: newAuthor.lastName,
     });
 
-    expect(response.status()).toBe(200);
+    expect(response.status()).toBe(HTTP_200_OK);
 
-    const body: AuthorResponse[] = await response.json();
+    const body = await parseResponse<AuthorResponse[]>(response);
 
     expect(body).toHaveLength(1);
     expect(body[0].firstName).toBe(newAuthor.firstName);
     expect(body[0].lastName).toBe(newAuthor.lastName);
   });
 
-  test('TC-AUTHORS-GET-POS-007 list item is consistent with GET /authors/{id}', async ({ request }) => {
-    const listResponse = await request.get(`${API_URL}/authors`, {
-      headers: { Accept: 'application/json' },
-      params: { firstName: authorA.firstName, lastName: authorA.lastName },
+  test('should return list item consistent with GET /authors/{id}', async ({ authorsApiRequest, authorsApiSteps }) => {
+    const listResponse = await authorsApiRequest.getAuthors({
+      firstName: authorA.firstName,
+      lastName: authorA.lastName,
     });
 
-    expect(listResponse.status()).toBe(200);
+    expect(listResponse.status()).toBe(HTTP_200_OK);
 
-    const list: AuthorResponse[] = await listResponse.json();
+    const list = await parseResponse<AuthorResponse[]>(listResponse);
 
     expect(list).toHaveLength(1);
 
-    const byIdResponse = await request.get(`${API_URL}/authors/${list[0].id}`, {
-      headers: { Accept: 'application/json' },
-    });
-
-    expect(byIdResponse.status()).toBe(200);
-
-    const byId: AuthorResponse = await byIdResponse.json();
+    const byId = await authorsApiSteps.getAuthorById(list[0].id);
 
     expect(byId.id).toBe(list[0].id);
     expect(byId.firstName).toBe(list[0].firstName);
     expect(byId.lastName).toBe(list[0].lastName);
   });
 
-  test('TC-AUTHORS-GET-POS-008 repeated identical requests return the same result', async ({ request }) => {
-    const options = {
-      headers: { Accept: 'application/json' },
-      params: { firstName: authorA.firstName, lastName: authorA.lastName },
-    };
+  test('should return the same result for repeated identical requests', async ({ authorsApiRequest }) => {
+    const params = { firstName: authorA.firstName, lastName: authorA.lastName };
 
-    const first = await request.get(`${API_URL}/authors`, options);
-    const second = await request.get(`${API_URL}/authors`, options);
+    const first = await authorsApiRequest.getAuthors(params);
+    const second = await authorsApiRequest.getAuthors(params);
 
-    expect(first.status()).toBe(200);
-    expect(second.status()).toBe(200);
-    expect(await second.json()).toEqual(await first.json());
+    expect(first.status()).toBe(HTTP_200_OK);
+    expect(second.status()).toBe(HTTP_200_OK);
+    expect(await parseResponse<AuthorResponse[]>(second)).toEqual(await parseResponse<AuthorResponse[]>(first));
   });
 });
