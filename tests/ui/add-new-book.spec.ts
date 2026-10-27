@@ -40,8 +40,9 @@ test.describe('Manage Books — add a new book', { tag: ['@ui', '@books'] }, () 
     await manageBooksPage.search(book.title);
     const row = manageBooksPage.bookRow(book.title);
     await expect(row).toHaveCount(1);
-    await expect.soft(row.getByRole('cell', { name: author.fullName })).toBeVisible();
-    await expect.soft(row.getByRole('cell', { name: String(book.year) })).toBeVisible();
-    await expect.soft(row.getByRole('cell', { name: String(book.quantity), exact: true })).toBeVisible();
+    await expect.soft(row).toContainText(author.fullName);
+    await expect.soft(row).toContainText(String(book.year));
+    await expect.soft(row).toContainText(String(book.price));
+    await expect.soft(row).toContainText(String(book.quantity));
   });
 });
