@@ -9,7 +9,7 @@ export class AuthorsAPIRequest {
   constructor(private readonly api: APIRequest) {}
 
   async createAuthor(payload: AuthorPayload): Promise<APIResponse> {
-    return this.api.post(API_ENDPOINTS.authors.base, payload);
+    return this.api.post(API_ENDPOINTS.authors.base, payload, JSON_HEADERS);
   }
 
   async getAuthors(params?: QueryParams, headers: RequestHeaders = JSON_HEADERS): Promise<APIResponse> {
