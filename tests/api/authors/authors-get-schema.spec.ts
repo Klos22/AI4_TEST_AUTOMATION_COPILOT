@@ -2,11 +2,16 @@ import { test, expect } from '@fixtures/test.fixture';
 import { HTTP_200_OK } from '@api/consts/http.status.codes.const';
 import { getRandomAuthorPayload } from '@api/factories/author.factory';
 import { AuthorPayload, AuthorResponse, AuthorsSchema } from '@api/models/author.model';
-import { getRandomLastName } from '@utils/random.data.utils';
+import { getRandomLastName, getRandomLowerCaseString } from '@utils/random.data.utils';
 import { parseResponse } from '@utils/parse.response.utils';
 
 const CONTENT_TYPE_JSON = 'application/json';
 const ALLOWED_AUTHOR_PROPERTIES = ['id', 'firstName', 'lastName'];
+
+function assertAuthorsSchema(body: AuthorResponse[]): void {
+  const result = AuthorsSchema.safeParse(body);
+  expect(result.success, result.success ? '' : result.error.message).toBe(true);
+}
 
 test.describe('GET /authors schema', { tag: ['@api', '@authors', '@schema', '@smoke'] }, () => {
   let author: AuthorPayload;
@@ -33,31 +38,40 @@ test.describe('GET /authors schema', { tag: ['@api', '@authors', '@schema', '@sm
 
     const body = await parseResponse<AuthorResponse[]>(response);
 
-    expect(Array.isArray(body)).toBeTruthy();
+    expect(Array.isArray(body)).toBe(true);
+    assertAuthorsSchema(body);
   });
 
-  test('should return array items matching Author schema', async ({ authorsApiSteps }) => {
-    const body = await authorsApiSteps.getAuthors();
+  test('should return array items matching Author schema', async ({ authorsApiRequest }) => {
+    const response = await authorsApiRequest.getAuthors();
+
+    expect(response.status()).toBe(HTTP_200_OK);
+    expect(response.headers()['content-type']).toContain(CONTENT_TYPE_JSON);
+
+    const body = await parseResponse<AuthorResponse[]>(response);
 
     expect(body.length).toBeGreaterThan(0);
-
-    const result = AuthorsSchema.safeParse(body);
-
-    expect(result.success, result.success ? '' : result.error.message).toBeTruthy();
+    assertAuthorsSchema(body);
 
     const ids = body.map((item) => item.id);
 
     expect(new Set(ids).size, 'ids should be unique').toBe(ids.length);
-    expect(ids.every((id) => Number.isSafeInteger(id))).toBeTruthy();
+    expect(ids.every((id) => Number.isInteger(id))).toBe(true);
   });
 
-  test('should not return unexpected properties in items', async ({ authorsApiSteps }) => {
-    const body = await authorsApiSteps.getAuthors();
+  test('should not return unexpected properties in items', async ({ authorsApiRequest }) => {
+    const response = await authorsApiRequest.getAuthors();
+
+    expect(response.status()).toBe(HTTP_200_OK);
+    expect(response.headers()['content-type']).toContain(CONTENT_TYPE_JSON);
+
+    const body = await parseResponse<AuthorResponse[]>(response);
+    assertAuthorsSchema(body);
 
     for (const item of body) {
-      expect(ALLOWED_AUTHOR_PROPERTIES, `item ${JSON.stringify(item)}`).toEqual(
-        expect.arrayContaining(Object.keys(item)),
-      );
+      const keys = Object.keys(item);
+      expect(ALLOWED_AUTHOR_PROPERTIES, `item ${JSON.stringify(item)}`).toEqual(expect.arrayContaining(keys));
+      expect(keys, `item ${JSON.stringify(item)}`).toEqual(expect.arrayContaining(ALLOWED_AUTHOR_PROPERTIES));
     }
   });
 
@@ -71,21 +85,22 @@ test.describe('GET /authors schema', { tag: ['@api', '@authors', '@schema', '@sm
     expect(response.headers()['content-type']).toContain(CONTENT_TYPE_JSON);
 
     const body = await parseResponse<AuthorResponse[]>(response);
-    const result = AuthorsSchema.safeParse(body);
-
-    expect(result.success, result.success ? '' : result.error.message).toBeTruthy();
+    assertAuthorsSchema(body);
     expect(body.length).toBeGreaterThanOrEqual(1);
+    expect(body.some((a) => a.firstName === author.firstName && a.lastName === author.lastName)).toBe(true);
   });
 
   test('should return an empty array when no author matches the filter', async ({ authorsApiRequest }) => {
-    const response = await authorsApiRequest.getAuthors({ lastName: getRandomLastName() });
+    const nonMatchingLastName = `${author.lastName}${getRandomLowerCaseString(8)}`;
+    const response = await authorsApiRequest.getAuthors({ lastName: nonMatchingLastName });
 
     expect(response.status()).toBe(HTTP_200_OK);
     expect(response.headers()['content-type']).toContain(CONTENT_TYPE_JSON);
 
     const body = await parseResponse<AuthorResponse[]>(response);
 
-    expect(Array.isArray(body)).toBeTruthy();
-    expect(body).toHaveLength(0);
+    expect(Array.isArray(body)).toBe(true);
+    assertAuthorsSchema(body);
+    expect(body).toEqual([]);
   });
 });
