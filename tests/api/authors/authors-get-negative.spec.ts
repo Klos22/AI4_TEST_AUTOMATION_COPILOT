@@ -1,113 +1,89 @@
 import { test, expect } from '@fixtures/test.fixture';
-import { faker } from '@faker-js/faker';
-import { z } from 'zod';
+import {
+  HTTP_200_OK,
+  HTTP_300_MULTIPLE_CHOICES,
+  HTTP_500_INTERNAL_SERVER_ERROR,
+} from '@api/consts/http.status.codes.const';
+import { getRandomAuthorPayload } from '@api/factories/author.factory';
+import { AuthorResponse, AuthorsSchema } from '@api/models/author.model';
+import { QueryParams } from '@api/requests/api.request';
+import { parseResponse } from '@utils/parse.response.utils';
+import { getRandomFirstName, getRandomLowerCaseString, getRandomWord } from '@utils/random.data.utils';
 
-const API_URL = 'https://bookstoreapi.up.railway.app';
+const emptyFilterDatasets: { description: string; params: QueryParams }[] = [
+  { description: 'empty string filter values', params: { firstName: '', lastName: '' } },
+  { description: 'whitespace-only filter value', params: { firstName: '   ' } },
+];
 
-const AuthorSchema = z.object({
-  id: z.number().int(),
-  firstName: z.string(),
-  lastName: z.string(),
-});
-const AuthorsSchema = z.array(AuthorSchema);
-
-// API accepts letters only in names, so uniqueness comes from a random lowercase suffix
-const uniqueName = (prefix: string): string => `${prefix}${faker.string.alpha({ length: 10, casing: 'lower' })}`;
-
-const headers = { Accept: 'application/json' };
-
-test.describe('GET /authors - negative', () => {
+test.describe('GET /authors 4xx', { tag: ['@api', '@authors', '@regression'] }, () => {
   test.describe.configure({ mode: 'serial' });
 
-  test('TC-AUTHORS-GET-NEG-001 empty string filter values', async ({ request }) => {
-    const response = await request.get(`${API_URL}/authors`, {
-      headers,
-      params: { firstName: '', lastName: '' },
-    });
+  const createdIds: number[] = [];
 
-    expect(response.status()).toBeLessThan(500);
-
-    if (response.status() === 200) {
-      const body = await response.json();
-      expect(AuthorsSchema.safeParse(body).success).toBeTruthy();
-      test.info().annotations.push({ type: 'observed', description: `200, ${body.length} authors returned` });
+  test.afterEach(async ({ authorsApiSteps }) => {
+    for (const id of createdIds.splice(0)) {
+      await authorsApiSteps.deleteAuthor(id);
     }
   });
 
-  test('TC-AUTHORS-GET-NEG-002 whitespace-only filter value', async ({ request }) => {
-    const response = await request.get(`${API_URL}/authors`, {
-      headers,
-      params: { firstName: '   ' },
-    });
+  emptyFilterDatasets.forEach(({ description, params }) => {
+    test(`should not fail with server error for ${description}`, async ({ authorsApiRequest }) => {
+      const response = await authorsApiRequest.getAuthors(params);
 
-    expect(response.status()).toBeLessThan(500);
+      expect(response.status()).toBeLessThan(HTTP_500_INTERNAL_SERVER_ERROR);
 
-    if (response.status() === 200) {
-      const body = await response.json();
-      expect(AuthorsSchema.safeParse(body).success).toBeTruthy();
-    }
-  });
-
-  test('TC-AUTHORS-GET-NEG-003 injection-like filter value is handled safely', async ({ request }) => {
-    const author = { firstName: uniqueName('Neg'), lastName: uniqueName('Inj') };
-    const postResponse = await request.post(`${API_URL}/authors`, { data: author });
-    expect(postResponse.status(), 'precondition: POST /authors').toBe(201);
-
-    try {
-      const response = await request.get(`${API_URL}/authors`, {
-        headers,
-        params: { lastName: "'; DROP TABLE authors;--" },
-      });
-
-      expect(response.status()).toBeLessThan(500);
-
-      if (response.status() === 200) {
-        expect(await response.json()).toEqual([]);
+      if (response.status() === HTTP_200_OK) {
+        const body = await parseResponse<AuthorResponse[]>(response);
+        expect(AuthorsSchema.safeParse(body).success).toBeTruthy();
+        test.info().annotations.push({ type: 'observed', description: `200, ${body.length} authors returned` });
       }
+    });
+  });
 
-      const afterResponse = await request.get(`${API_URL}/authors`, { headers, params: author });
-      expect(afterResponse.status()).toBe(200);
-      const after = AuthorsSchema.parse(await afterResponse.json());
-      expect(after).toHaveLength(1);
-    } finally {
-      const lookup = await request.get(`${API_URL}/authors`, { headers, params: author });
-      for (const { id } of AuthorsSchema.parse(await lookup.json())) {
-        await request.delete(`${API_URL}/authors/${id}`);
-      }
+  test('should handle injection-like filter value safely', async ({ authorsApiRequest, authorsApiSteps }) => {
+    const author = getRandomAuthorPayload();
+    const created = await authorsApiSteps.createAuthor(author);
+    createdIds.push(created.id);
+
+    const response = await authorsApiRequest.getAuthors({ lastName: "'; DROP TABLE authors;--" });
+
+    expect(response.status()).toBeLessThan(HTTP_500_INTERNAL_SERVER_ERROR);
+
+    if (response.status() === HTTP_200_OK) {
+      expect(await parseResponse<AuthorResponse[]>(response)).toEqual([]);
+    }
+
+    const after = await authorsApiSteps.getAuthors({ firstName: author.firstName, lastName: author.lastName });
+    expect(AuthorsSchema.safeParse(after).success).toBeTruthy();
+    expect(after).toHaveLength(1);
+  });
+
+  test('should handle very long filter value', async ({ authorsApiRequest }) => {
+    const response = await authorsApiRequest.getAuthors({ firstName: getRandomLowerCaseString(1000) });
+
+    expect(response.status()).toBeLessThan(HTTP_500_INTERNAL_SERVER_ERROR);
+
+    if (response.status() === HTTP_200_OK) {
+      expect(await parseResponse<AuthorResponse[]>(response)).toEqual([]);
     }
   });
 
-  test('TC-AUTHORS-GET-NEG-004 very long filter value', async ({ request }) => {
-    const longValue = faker.string.alpha({ length: 1000, casing: 'lower' });
+  test('should ignore unknown query parameter', async ({ authorsApiRequest }) => {
+    const unknownResponse = await authorsApiRequest.getAuthors({ unknown: getRandomWord() });
 
-    const response = await request.get(`${API_URL}/authors`, {
-      headers,
-      params: { firstName: longValue },
-    });
+    expect(unknownResponse.status()).toBeLessThan(HTTP_500_INTERNAL_SERVER_ERROR);
 
-    expect(response.status()).toBeLessThan(500);
-
-    if (response.status() === 200) {
-      expect(await response.json()).toEqual([]);
-    }
-  });
-
-  test('TC-AUTHORS-GET-NEG-005 unknown query parameter is ignored', async ({ request }) => {
-    const unknownResponse = await request.get(`${API_URL}/authors`, {
-      headers,
-      params: { unknown: faker.lorem.word() },
-    });
-
-    expect(unknownResponse.status()).toBeLessThan(500);
-
-    if (unknownResponse.status() === 200) {
+    if (unknownResponse.status() === HTTP_200_OK) {
       // Other specs create/delete authors in parallel, so compare both lists fetched together until stable
       await expect
         .poll(
           async () => {
-            const withParam = await request.get(`${API_URL}/authors`, { headers, params: { unknown: 'abc' } });
-            const without = await request.get(`${API_URL}/authors`, { headers });
-            return JSON.stringify(await withParam.json()) === JSON.stringify(await without.json());
+            const withParam = await authorsApiRequest.getAuthors({ unknown: 'abc' });
+            const without = await authorsApiRequest.getAuthors();
+            return (
+              JSON.stringify(await parseResponse<AuthorResponse[]>(withParam)) ===
+              JSON.stringify(await parseResponse<AuthorResponse[]>(without))
+            );
           },
           { timeout: 20_000 },
         )
@@ -115,52 +91,41 @@ test.describe('GET /authors - negative', () => {
     }
   });
 
-  test('TC-AUTHORS-GET-NEG-006 duplicated filter parameter', async ({ request }) => {
-    const firstA = uniqueName('Dupa');
-    const firstB = uniqueName('Dupb');
+  test('should handle duplicated filter parameter', async ({ authorsApiRequest }) => {
+    const response = await authorsApiRequest.getAuthorsByRawQuery(
+      `firstName=${getRandomFirstName()}&firstName=${getRandomFirstName()}`,
+    );
 
-    const response = await request.get(`${API_URL}/authors?firstName=${firstA}&firstName=${firstB}`, { headers });
+    expect(response.status()).toBeLessThan(HTTP_500_INTERNAL_SERVER_ERROR);
 
-    expect(response.status()).toBeLessThan(500);
-
-    if (response.status() === 200) {
-      const body = await response.json();
+    if (response.status() === HTTP_200_OK) {
+      const body = await parseResponse<AuthorResponse[]>(response);
       expect(AuthorsSchema.safeParse(body).success).toBeTruthy();
     }
   });
 
-  test('TC-AUTHORS-GET-NEG-007 unsupported Accept header', async ({ request }) => {
-    const response = await request.get(`${API_URL}/authors`, {
-      headers: { Accept: 'application/xml' },
-    });
+  test('should handle unsupported Accept header', async ({ authorsApiRequest }) => {
+    const response = await authorsApiRequest.getAuthors(undefined, { Accept: 'application/xml' });
 
-    expect(response.status()).toBeLessThan(500);
+    expect(response.status()).toBeLessThan(HTTP_500_INTERNAL_SERVER_ERROR);
 
-    if (response.status() === 200) {
-      const body = await response.json();
+    if (response.status() === HTTP_200_OK) {
+      const body = await parseResponse<AuthorResponse[]>(response);
       expect(AuthorsSchema.safeParse(body).success).toBeTruthy();
     }
   });
 
-  test('TC-AUTHORS-GET-NEG-008 DELETE /authors is rejected and does not delete data', async ({ request }) => {
-    const author = { firstName: uniqueName('Neg'), lastName: uniqueName('Del') };
-    const postResponse = await request.post(`${API_URL}/authors`, { data: author });
-    expect(postResponse.status(), 'precondition: POST /authors').toBe(201);
+  test('should reject DELETE /authors and not delete data', async ({ authorsApiRequest, authorsApiSteps }) => {
+    const author = getRandomAuthorPayload();
+    const created = await authorsApiSteps.createAuthor(author);
+    createdIds.push(created.id);
 
-    try {
-      const response = await request.delete(`${API_URL}/authors`, { headers });
+    const response = await authorsApiRequest.deleteAuthors();
 
-      expect(response.status()).toBeGreaterThanOrEqual(300);
-      expect(response.status()).toBeLessThan(500);
+    expect(response.status()).toBeGreaterThanOrEqual(HTTP_300_MULTIPLE_CHOICES);
+    expect(response.status()).toBeLessThan(HTTP_500_INTERNAL_SERVER_ERROR);
 
-      const afterResponse = await request.get(`${API_URL}/authors`, { headers, params: author });
-      expect(afterResponse.status()).toBe(200);
-      expect(AuthorsSchema.parse(await afterResponse.json())).toHaveLength(1);
-    } finally {
-      const lookup = await request.get(`${API_URL}/authors`, { headers, params: author });
-      for (const { id } of AuthorsSchema.parse(await lookup.json())) {
-        await request.delete(`${API_URL}/authors/${id}`);
-      }
-    }
+    const after = await authorsApiSteps.getAuthors({ firstName: author.firstName, lastName: author.lastName });
+    expect(AuthorsSchema.parse(after)).toHaveLength(1);
   });
 });

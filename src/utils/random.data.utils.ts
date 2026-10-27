@@ -6,6 +6,14 @@ function getRandomLettersName(base: string): string {
   return `${lettersOnly}${faker.string.alpha({ length: 10, casing: 'lower' })}`;
 }
 
+export function getRandomLowerCaseString(length: number): string {
+  return faker.string.alpha({ length, casing: 'lower' });
+}
+
+export function getRandomWord(): string {
+  return faker.lorem.word();
+}
+
 export function getRandomFirstName(): string {
   return getRandomLettersName(faker.person.firstName());
 }

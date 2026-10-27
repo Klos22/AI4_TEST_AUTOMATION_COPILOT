@@ -5,6 +5,7 @@ export const HTTP_202_ACCEPTED = 202;
 export const HTTP_204_NO_CONTENT = 204;
 
 // 3xx - Redirection Responses
+export const HTTP_300_MULTIPLE_CHOICES = 300;
 export const HTTP_301_MOVED_PERMANENTLY = 301;
 export const HTTP_302_FOUND = 302;
 export const HTTP_303_SEE_OTHER = 303;
