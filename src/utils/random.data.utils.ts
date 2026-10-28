@@ -21,3 +21,20 @@ export function getRandomFirstName(): string {
 export function getRandomLastName(): string {
   return getRandomLettersName(faker.person.lastName());
 }
+
+// the random suffix guarantees a unique title
+export function getRandomBookTitle(): string {
+  return `${faker.book.title()} ${faker.string.alphanumeric(8)}`;
+}
+
+export function getRandomBookYear(): number {
+  return faker.number.int({ min: 1900, max: new Date().getFullYear() });
+}
+
+export function getRandomPrice(): number {
+  return faker.number.float({ min: 1, max: 1000, fractionDigits: 2 });
+}
+
+export function getRandomAvailable(): number {
+  return faker.number.int({ min: 1, max: 10000 });
+}
