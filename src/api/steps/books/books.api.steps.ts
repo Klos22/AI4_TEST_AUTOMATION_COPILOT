@@ -13,6 +13,7 @@ export class BooksAPISteps {
     const data = payload ?? getRandomBookPayload();
     const response = await this.booksAPIRequest.createBook(data);
     expect(response.status(), 'precondition: POST /books').toBe(HTTP_201_CREATED);
+    expect(response.headers()['content-type'], 'POST /books content-type').toContain('application/json');
     const responseBody = await parseResponse<BookResponse>(response);
     expect(responseBody).toHaveProperty('id');
     return responseBody;
@@ -21,12 +22,14 @@ export class BooksAPISteps {
   async getBooks(params?: QueryParams): Promise<BookResponse[]> {
     const response = await this.booksAPIRequest.getBooks(params);
     expect(response.status(), 'GET /books').toBe(HTTP_200_OK);
+    expect(response.headers()['content-type'], 'GET /books content-type').toContain('application/json');
     return parseResponse<BookResponse[]>(response);
   }
 
   async getBookById(id: number): Promise<BookResponse> {
     const response = await this.booksAPIRequest.getBookById(id);
     expect(response.status(), 'GET /books/{id}').toBe(HTTP_200_OK);
+    expect(response.headers()['content-type'], 'GET /books/{id} content-type').toContain('application/json');
     return parseResponse<BookResponse>(response);
   }
 

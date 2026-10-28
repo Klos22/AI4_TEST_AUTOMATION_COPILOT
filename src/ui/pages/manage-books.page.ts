@@ -15,6 +15,14 @@ export class ManageBooksPage {
     return this.page.getByRole('row').filter({ hasText: title });
   }
 
+  async open(): Promise<void> {
+    await this.page.goto('/books-management');
+  }
+
+  async openEditBookDialog(title: string): Promise<void> {
+    await this.bookRow(title).getByRole('button', { name: '✏️' }).click();
+  }
+
   async openAddBookDialog(): Promise<void> {
     await this.addBookButton.click();
   }

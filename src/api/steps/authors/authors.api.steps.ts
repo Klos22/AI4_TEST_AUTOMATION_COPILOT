@@ -13,6 +13,7 @@ export class AuthorsAPISteps {
     const data = payload ?? getRandomAuthorPayload();
     const response = await this.authorsAPIRequest.createAuthor(data);
     expect(response.status(), 'precondition: POST /authors').toBe(HTTP_201_CREATED);
+    expect(response.headers()['content-type'], 'POST /authors content-type').toContain('application/json');
     const responseBody = await parseResponse<AuthorResponse>(response);
     expect(responseBody).toHaveProperty('id');
     return responseBody;
@@ -21,12 +22,14 @@ export class AuthorsAPISteps {
   async getAuthors(params?: QueryParams): Promise<AuthorResponse[]> {
     const response = await this.authorsAPIRequest.getAuthors(params);
     expect(response.status(), 'GET /authors').toBe(HTTP_200_OK);
+    expect(response.headers()['content-type'], 'GET /authors content-type').toContain('application/json');
     return parseResponse<AuthorResponse[]>(response);
   }
 
   async getAuthorById(id: number): Promise<AuthorResponse> {
     const response = await this.authorsAPIRequest.getAuthorById(id);
     expect(response.status(), 'GET /authors/{id}').toBe(HTTP_200_OK);
+    expect(response.headers()['content-type'], 'GET /authors/{id} content-type').toContain('application/json');
     return parseResponse<AuthorResponse>(response);
   }
 
