@@ -20,6 +20,10 @@ export class BooksAPIRequest {
     return this.api.get(API_ENDPOINTS.books.byId(id), undefined, JSON_HEADERS);
   }
 
+  async updateBook(id: number, payload: BookPayload): Promise<APIResponse> {
+    return this.api.put(API_ENDPOINTS.books.byId(id), payload, { ...JSON_HEADERS, 'Content-Type': 'application/json' });
+  }
+
   async deleteBook(id: number): Promise<APIResponse> {
     return this.api.delete(API_ENDPOINTS.books.byId(id));
   }

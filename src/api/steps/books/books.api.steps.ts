@@ -30,6 +30,13 @@ export class BooksAPISteps {
     return parseResponse<BookResponse>(response);
   }
 
+  async updateBook(id: number, payload: BookPayload): Promise<BookResponse> {
+    const response = await this.booksAPIRequest.updateBook(id, payload);
+    expect(response.status(), 'PUT /books/{id}').toBe(HTTP_200_OK);
+    expect(response.headers()['content-type'], 'PUT /books/{id} content-type').toContain('application/json');
+    return parseResponse<BookResponse>(response);
+  }
+
   async deleteBook(id: number): Promise<void> {
     const response = await this.booksAPIRequest.deleteBook(id);
     expect(response.status(), 'cleanup: DELETE /books/{id}').toBe(HTTP_204_NO_CONTENT);
